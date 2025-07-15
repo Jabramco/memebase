@@ -39,108 +39,152 @@ function MemeDisplay({ memes, onDeleteMeme, showToast }) {
         // For Firebase Storage URLs or other external URLs
         console.log('Attempting to copy external image:', imageUrl);
         
-        // Always use canvas method for external URLs to ensure we get image data
-        const img = new Image();
-        
-        // Create a promise to handle the image loading
-        const loadImage = () => new Promise((resolve, reject) => {
-          const timeout = setTimeout(() => {
-            reject(new Error('Image load timeout after 10 seconds'));
-          }, 10000);
-          
-          img.onload = () => {
-            clearTimeout(timeout);
-            console.log('Image loaded successfully:', img.width, 'x', img.height);
-            resolve();
-          };
-          
-          img.onerror = (error) => {
-            clearTimeout(timeout);
-            reject(new Error(`Failed to load image: ${error.message || 'Network error'}`));
-          };
-          
-          // Try loading without crossOrigin first (works for many cases)
-          img.src = imageUrl;
-        });
-        
+        // Method 1: Try direct fetch with proper headers (works for many Firebase Storage URLs)
         try {
-          await loadImage();
-          
-          // Create canvas and draw the image
-          const canvas = document.createElement('canvas');
-          const ctx = canvas.getContext('2d');
-          
-          canvas.width = img.naturalWidth || img.width;
-          canvas.height = img.naturalHeight || img.height;
-          
-          console.log('Canvas size:', canvas.width, 'x', canvas.height);
-          
-          // Clear canvas and draw image
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-          ctx.drawImage(img, 0, 0);
-          
-          // Convert canvas to blob
-          blob = await new Promise((resolve, reject) => {
-            canvas.toBlob((canvasBlob) => {
-              if (canvasBlob) {
-                console.log('Canvas converted to blob:', canvasBlob.type, canvasBlob.size);
-                resolve(canvasBlob);
-              } else {
-                reject(new Error('Failed to convert canvas to blob'));
-              }
-            }, 'image/png', 1.0);
+          const response = await fetch(imageUrl, {
+            method: 'GET',
+            mode: 'cors',
+            credentials: 'omit',
+            headers: {
+              'Accept': 'image/*',
+              'Cache-Control': 'no-cache'
+            }
           });
           
-        } catch (canvasError) {
-          console.warn('Canvas method failed, trying with CORS headers:', canvasError);
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
           
-          // Try again with CORS headers
+          blob = await response.blob();
+          console.log('Direct fetch successful:', blob.type, blob.size);
+          
+          // Validate it's actually an image
+          if (!blob.type.startsWith('image/')) {
+            throw new Error('Response is not an image');
+          }
+          
+        } catch (fetchError) {
+          console.warn('Direct fetch failed, trying alternative method:', fetchError);
+          
+          // Method 2: Use a proxy image approach (create a temporary image element)
           try {
-            const imgWithCors = new Image();
-            imgWithCors.crossOrigin = 'anonymous';
+            // Create a temporary image element
+            const img = new Image();
             
-            await new Promise((resolve, reject) => {
+            // For Firebase Storage URLs, we can often load them directly without crossOrigin
+            // since they should be publicly accessible
+            const imageLoadPromise = new Promise((resolve, reject) => {
               const timeout = setTimeout(() => {
-                reject(new Error('CORS image load timeout'));
-              }, 10000);
+                reject(new Error('Image load timeout'));
+              }, 15000);
               
-              imgWithCors.onload = () => {
+              img.onload = () => {
                 clearTimeout(timeout);
+                console.log('Image loaded successfully:', img.width, 'x', img.height);
                 resolve();
               };
               
-              imgWithCors.onerror = (error) => {
+              img.onerror = (error) => {
                 clearTimeout(timeout);
-                reject(new Error(`CORS image load failed: ${error.message || 'Network error'}`));
+                reject(new Error(`Image load failed: ${error.message || 'Network error'}`));
               };
               
-              imgWithCors.src = imageUrl;
+              // Load the image
+              img.src = imageUrl;
             });
             
-            // Create canvas and draw the CORS image
+            await imageLoadPromise;
+            
+            // Create canvas and draw the image
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             
-            canvas.width = imgWithCors.naturalWidth || imgWithCors.width;
-            canvas.height = imgWithCors.naturalHeight || imgWithCors.height;
+            canvas.width = img.naturalWidth || img.width;
+            canvas.height = img.naturalHeight || img.height;
             
+            console.log('Canvas size:', canvas.width, 'x', canvas.height);
+            
+            // Draw the image on canvas
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(imgWithCors, 0, 0);
+            ctx.drawImage(img, 0, 0);
             
             // Convert canvas to blob
             blob = await new Promise((resolve, reject) => {
               canvas.toBlob((canvasBlob) => {
-                if (canvasBlob) {
+                if (canvasBlob && canvasBlob.size > 0) {
+                  console.log('Canvas converted to blob:', canvasBlob.type, canvasBlob.size);
                   resolve(canvasBlob);
                 } else {
-                  reject(new Error('Failed to convert CORS canvas to blob'));
+                  reject(new Error('Failed to create image blob from canvas'));
                 }
               }, 'image/png', 1.0);
             });
             
-          } catch (corsError) {
-            console.error('Both canvas methods failed:', corsError);
-            throw new Error(`Unable to copy image: ${corsError.message}`);
+          } catch (canvasError) {
+            console.error('Canvas method failed:', canvasError);
+            
+            // Method 3: Last resort - try to get image data through Firebase Storage getDownloadURL
+            try {
+              // If it's a Firebase Storage URL, we can try to fetch it with a different approach
+              if (imageUrl.includes('firebasestorage.googleapis.com')) {
+                // Parse the URL to get the actual file path
+                const urlParts = imageUrl.split('?');
+                const baseUrl = urlParts[0];
+                
+                // Try fetching with no-cors mode (will give us opaque response)
+                await fetch(baseUrl, {
+                  method: 'GET',
+                  mode: 'no-cors',
+                  credentials: 'omit'
+                });
+                
+                // Since it's opaque, we need to use a different approach
+                const img = new Image();
+                img.crossOrigin = 'use-credentials';
+                
+                await new Promise((resolve, reject) => {
+                  const timeout = setTimeout(() => {
+                    reject(new Error('Credentials image load timeout'));
+                  }, 10000);
+                  
+                  img.onload = () => {
+                    clearTimeout(timeout);
+                    resolve();
+                  };
+                  
+                  img.onerror = () => {
+                    clearTimeout(timeout);
+                    reject(new Error('Credentials image load failed'));
+                  };
+                  
+                  img.src = imageUrl;
+                });
+                
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = img.naturalWidth || img.width;
+                canvas.height = img.naturalHeight || img.height;
+                
+                ctx.drawImage(img, 0, 0);
+                
+                blob = await new Promise((resolve, reject) => {
+                  canvas.toBlob((canvasBlob) => {
+                    if (canvasBlob) {
+                      resolve(canvasBlob);
+                    } else {
+                      reject(new Error('Failed to convert credentials canvas to blob'));
+                    }
+                  }, 'image/png', 1.0);
+                });
+                
+              } else {
+                throw new Error('Not a Firebase Storage URL');
+              }
+              
+            } catch (finalError) {
+              console.error('All methods failed:', finalError);
+              throw new Error(`Unable to copy image: All methods failed. ${finalError.message}`);
+            }
           }
         }
       }
