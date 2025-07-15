@@ -8,217 +8,157 @@ function MemeDisplay({ memes, onDeleteMeme, showToast }) {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [memeToDelete, setMemeToDelete] = useState(null);
 
-  const handleCopyImage = async (imageUrl) => {
+  const handleCopyImage = async (imageUrl, event) => {
     try {
       // Check if clipboard API supports writing images
       if (!navigator.clipboard || !window.isSecureContext) {
         throw new Error('Clipboard API not supported or not in secure context');
       }
 
-      // Check if ClipboardItem is supported
-      if (!window.ClipboardItem) {
-        throw new Error('ClipboardItem not supported');
-      }
-
       showToast('Copying image...', 'info');
       
-      let blob;
+      // Find the actual image element that's already loaded on the page
+      const button = event.target.closest('button');
+      if (!button) {
+        throw new Error('Could not find button element');
+      }
       
-      // Check if the imageUrl is a data URL (base64)
-      if (imageUrl.startsWith('data:')) {
-        try {
-          // Convert data URL to blob
-          const response = await fetch(imageUrl);
-          blob = await response.blob();
-          console.log('Data URL converted to blob:', blob.type, blob.size);
-        } catch (error) {
-          console.error('Failed to convert data URL to blob:', error);
-          throw error;
-        }
-      } else {
-        // For Firebase Storage URLs or other external URLs
-        console.log('Attempting to copy external image:', imageUrl);
+      const memeCard = button.closest('.meme-card');
+      if (!memeCard) {
+        throw new Error('Could not find meme card');
+      }
+      
+      const imageElement = memeCard.querySelector('.meme-image');
+      if (!imageElement) {
+        throw new Error('Could not find image element');
+      }
+      
+      console.log('Found image element:', {
+        src: imageElement.src,
+        complete: imageElement.complete,
+        naturalWidth: imageElement.naturalWidth,
+        naturalHeight: imageElement.naturalHeight
+      });
+      
+      // Make sure the image is fully loaded
+      if (!imageElement.complete) {
+        throw new Error('Image is not fully loaded');
+      }
+      
+      // Method 1: Try using the Selection API to copy the image
+      try {
+        console.log('Attempting to copy using Selection API...');
         
-        // Method 1: Try direct fetch with proper headers (works for many Firebase Storage URLs)
+        // Create a range and select the image
+        const range = document.createRange();
+        range.selectNode(imageElement);
+        
+        // Clear any existing selection
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+        
+        // Try to copy using the older execCommand (still works for images in some browsers)
+        const success = document.execCommand('copy');
+        
+        // Clear the selection
+        selection.removeAllRanges();
+        
+        if (success) {
+          console.log('Successfully copied using Selection API');
+          showToast('Image copied! You can now paste it in other apps.', 'success');
+          return;
+        } else {
+          throw new Error('execCommand copy failed');
+        }
+        
+      } catch (selectionError) {
+        console.warn('Selection API copy failed:', selectionError.message);
+        
+        // Method 2: Try creating a temporary link with the image
         try {
-          const response = await fetch(imageUrl, {
-            method: 'GET',
-            mode: 'cors',
-            credentials: 'omit',
-            headers: {
-              'Accept': 'image/*',
-              'Cache-Control': 'no-cache'
+          console.log('Attempting to copy using temporary link method...');
+          
+          // Create a temporary container
+          const tempContainer = document.createElement('div');
+          tempContainer.style.position = 'fixed';
+          tempContainer.style.left = '-9999px';
+          tempContainer.style.top = '-9999px';
+          tempContainer.style.opacity = '0';
+          
+          // Create a copy of the image
+          const tempImg = document.createElement('img');
+          tempImg.src = imageElement.src;
+          tempImg.style.width = imageElement.style.width || `${imageElement.naturalWidth}px`;
+          tempImg.style.height = imageElement.style.height || `${imageElement.naturalHeight}px`;
+          
+          tempContainer.appendChild(tempImg);
+          document.body.appendChild(tempContainer);
+          
+          // Wait for the image to load
+          await new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+              reject(new Error('Temporary image load timeout'));
+            }, 5000);
+            
+            if (tempImg.complete) {
+              clearTimeout(timeout);
+              resolve();
+            } else {
+              tempImg.onload = () => {
+                clearTimeout(timeout);
+                resolve();
+              };
+              tempImg.onerror = () => {
+                clearTimeout(timeout);
+                reject(new Error('Temporary image load failed'));
+              };
             }
           });
           
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          // Select the temporary image
+          const range = document.createRange();
+          range.selectNode(tempImg);
+          
+          const selection = window.getSelection();
+          selection.removeAllRanges();
+          selection.addRange(range);
+          
+          // Try to copy
+          const success = document.execCommand('copy');
+          
+          // Clean up
+          selection.removeAllRanges();
+          document.body.removeChild(tempContainer);
+          
+          if (success) {
+            console.log('Successfully copied using temporary link method');
+            showToast('Image copied! You can now paste it in other apps.', 'success');
+            return;
+          } else {
+            throw new Error('Temporary link copy failed');
           }
           
-          blob = await response.blob();
-          console.log('Direct fetch successful:', blob.type, blob.size);
+        } catch (linkError) {
+          console.warn('Temporary link copy failed:', linkError.message);
           
-          // Validate it's actually an image
-          if (!blob.type.startsWith('image/')) {
-            throw new Error('Response is not an image');
-          }
-          
-        } catch (fetchError) {
-          console.warn('Direct fetch failed, trying alternative method:', fetchError);
-          
-          // Method 2: Use a proxy image approach (create a temporary image element)
-          try {
-            // Create a temporary image element
-            const img = new Image();
-            
-            // For Firebase Storage URLs, we can often load them directly without crossOrigin
-            // since they should be publicly accessible
-            const imageLoadPromise = new Promise((resolve, reject) => {
-              const timeout = setTimeout(() => {
-                reject(new Error('Image load timeout'));
-              }, 15000);
-              
-              img.onload = () => {
-                clearTimeout(timeout);
-                console.log('Image loaded successfully:', img.width, 'x', img.height);
-                resolve();
-              };
-              
-              img.onerror = (error) => {
-                clearTimeout(timeout);
-                reject(new Error(`Image load failed: ${error.message || 'Network error'}`));
-              };
-              
-              // Load the image
-              img.src = imageUrl;
-            });
-            
-            await imageLoadPromise;
-            
-            // Create canvas and draw the image
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            
-            canvas.width = img.naturalWidth || img.width;
-            canvas.height = img.naturalHeight || img.height;
-            
-            console.log('Canvas size:', canvas.width, 'x', canvas.height);
-            
-            // Draw the image on canvas
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(img, 0, 0);
-            
-            // Convert canvas to blob
-            blob = await new Promise((resolve, reject) => {
-              canvas.toBlob((canvasBlob) => {
-                if (canvasBlob && canvasBlob.size > 0) {
-                  console.log('Canvas converted to blob:', canvasBlob.type, canvasBlob.size);
-                  resolve(canvasBlob);
-                } else {
-                  reject(new Error('Failed to create image blob from canvas'));
-                }
-              }, 'image/png', 1.0);
-            });
-            
-          } catch (canvasError) {
-            console.error('Canvas method failed:', canvasError);
-            
-            // Method 3: Last resort - try to get image data through Firebase Storage getDownloadURL
-            try {
-              // If it's a Firebase Storage URL, we can try to fetch it with a different approach
-              if (imageUrl.includes('firebasestorage.googleapis.com')) {
-                // Parse the URL to get the actual file path
-                const urlParts = imageUrl.split('?');
-                const baseUrl = urlParts[0];
-                
-                // Try fetching with no-cors mode (will give us opaque response)
-                await fetch(baseUrl, {
-                  method: 'GET',
-                  mode: 'no-cors',
-                  credentials: 'omit'
-                });
-                
-                // Since it's opaque, we need to use a different approach
-                const img = new Image();
-                img.crossOrigin = 'use-credentials';
-                
-                await new Promise((resolve, reject) => {
-                  const timeout = setTimeout(() => {
-                    reject(new Error('Credentials image load timeout'));
-                  }, 10000);
-                  
-                  img.onload = () => {
-                    clearTimeout(timeout);
-                    resolve();
-                  };
-                  
-                  img.onerror = () => {
-                    clearTimeout(timeout);
-                    reject(new Error('Credentials image load failed'));
-                  };
-                  
-                  img.src = imageUrl;
-                });
-                
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
-                canvas.width = img.naturalWidth || img.width;
-                canvas.height = img.naturalHeight || img.height;
-                
-                ctx.drawImage(img, 0, 0);
-                
-                blob = await new Promise((resolve, reject) => {
-                  canvas.toBlob((canvasBlob) => {
-                    if (canvasBlob) {
-                      resolve(canvasBlob);
-                    } else {
-                      reject(new Error('Failed to convert credentials canvas to blob'));
-                    }
-                  }, 'image/png', 1.0);
-                });
-                
-              } else {
-                throw new Error('Not a Firebase Storage URL');
-              }
-              
-            } catch (finalError) {
-              console.error('All methods failed:', finalError);
-              throw new Error(`Unable to copy image: All methods failed. ${finalError.message}`);
-            }
-          }
+          // Method 3: Last resort - copy the URL
+          console.log('Falling back to URL copy...');
+          await navigator.clipboard.writeText(imageUrl);
+          showToast('Image URL copied to clipboard! (Right-click image and copy works better)', 'info');
         }
       }
       
-      // Ensure we have a valid image blob
-      if (!blob) {
-        throw new Error('No image blob was created');
-      }
-      
-      // Validate blob type and size
-      if (!blob.type.startsWith('image/')) {
-        console.warn('Blob type is not an image:', blob.type);
-        // Force PNG type if not detected as image
-        blob = new Blob([blob], { type: 'image/png' });
-      }
-      
-      if (blob.size === 0) {
-        throw new Error('Generated image blob is empty');
-      }
-      
-      console.log('Final blob for clipboard:', blob.type, blob.size);
-      
-      // Create ClipboardItem with the image blob
-      const clipboardItem = new ClipboardItem({
-        [blob.type]: blob
-      });
-      
-      // Copy the image to clipboard
-      await navigator.clipboard.write([clipboardItem]);
-      showToast('Image copied! You can now paste it in other apps.', 'success');
-      
     } catch (error) {
-      console.error('Failed to copy image:', error);
-      showToast(`Failed to copy image: ${error.message}`, 'error');
+      console.error('Copy failed:', error);
+      
+      // Final fallback: copy URL
+      try {
+        await navigator.clipboard.writeText(imageUrl);
+        showToast('Image URL copied as fallback! (Try right-click → copy on the image)', 'info');
+      } catch (urlError) {
+        showToast(`Copy failed: ${error.message}. Try right-click → copy on the image.`, 'error');
+      }
     }
   };
 
@@ -287,7 +227,7 @@ function MemeDisplay({ memes, onDeleteMeme, showToast }) {
             </div>
             <div className="meme-actions">
               <button
-                onClick={() => handleCopyImage(meme.imageUrl)}
+                onClick={(e) => handleCopyImage(meme.imageUrl, e)}
                 className="btn btn-secondary btn-small"
               >
                 <Copy size={14} />
