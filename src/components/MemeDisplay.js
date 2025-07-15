@@ -37,69 +37,95 @@ function MemeDisplay({ memes, onDeleteMeme, showToast }) {
         }
       } else {
         // For Firebase Storage URLs or other external URLs
-        console.log('Attempting to fetch external image:', imageUrl);
+        console.log('Attempting to copy external image:', imageUrl);
         
-        // Method 1: Try direct fetch first (works if CORS is properly configured)
+        // Always use canvas method for external URLs to ensure we get image data
+        const img = new Image();
+        
+        // Create a promise to handle the image loading
+        const loadImage = () => new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            reject(new Error('Image load timeout after 10 seconds'));
+          }, 10000);
+          
+          img.onload = () => {
+            clearTimeout(timeout);
+            console.log('Image loaded successfully:', img.width, 'x', img.height);
+            resolve();
+          };
+          
+          img.onerror = (error) => {
+            clearTimeout(timeout);
+            reject(new Error(`Failed to load image: ${error.message || 'Network error'}`));
+          };
+          
+          // Try loading without crossOrigin first (works for many cases)
+          img.src = imageUrl;
+        });
+        
         try {
-          const response = await fetch(imageUrl, {
-            method: 'GET',
-            mode: 'cors',
-            credentials: 'omit'
+          await loadImage();
+          
+          // Create canvas and draw the image
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          
+          canvas.width = img.naturalWidth || img.width;
+          canvas.height = img.naturalHeight || img.height;
+          
+          console.log('Canvas size:', canvas.width, 'x', canvas.height);
+          
+          // Clear canvas and draw image
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0);
+          
+          // Convert canvas to blob
+          blob = await new Promise((resolve, reject) => {
+            canvas.toBlob((canvasBlob) => {
+              if (canvasBlob) {
+                console.log('Canvas converted to blob:', canvasBlob.type, canvasBlob.size);
+                resolve(canvasBlob);
+              } else {
+                reject(new Error('Failed to convert canvas to blob'));
+              }
+            }, 'image/png', 1.0);
           });
           
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
+        } catch (canvasError) {
+          console.warn('Canvas method failed, trying with CORS headers:', canvasError);
           
-          blob = await response.blob();
-          console.log('Direct fetch successful:', blob.type, blob.size);
-          
-          // Ensure blob is a valid image type
-          if (!blob.type.startsWith('image/')) {
-            throw new Error('Retrieved content is not an image');
-          }
-          
-        } catch (fetchError) {
-          console.warn('Direct fetch failed, trying proxy method:', fetchError);
-          
-          // Method 2: Use a CORS proxy approach by creating a new image and converting via canvas
-          // But first, let's try loading with proper CORS headers
+          // Try again with CORS headers
           try {
-            const img = new Image();
-            img.crossOrigin = 'anonymous'; // This is key for CORS
+            const imgWithCors = new Image();
+            imgWithCors.crossOrigin = 'anonymous';
             
-            // Create a promise to handle the image loading
-            const loadImage = () => new Promise((resolve, reject) => {
+            await new Promise((resolve, reject) => {
               const timeout = setTimeout(() => {
-                reject(new Error('Image load timeout'));
-              }, 15000); // 15 second timeout
+                reject(new Error('CORS image load timeout'));
+              }, 10000);
               
-              img.onload = () => {
+              imgWithCors.onload = () => {
                 clearTimeout(timeout);
                 resolve();
               };
               
-              img.onerror = (error) => {
+              imgWithCors.onerror = (error) => {
                 clearTimeout(timeout);
-                reject(new Error(`Failed to load image with CORS: ${error.message || 'Network error'}`));
+                reject(new Error(`CORS image load failed: ${error.message || 'Network error'}`));
               };
               
-              // Set the source after setting up event listeners
-              img.src = imageUrl;
+              imgWithCors.src = imageUrl;
             });
             
-            await loadImage();
-            
-            // Create canvas and draw the image
+            // Create canvas and draw the CORS image
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             
-            canvas.width = img.naturalWidth || img.width;
-            canvas.height = img.naturalHeight || img.height;
+            canvas.width = imgWithCors.naturalWidth || imgWithCors.width;
+            canvas.height = imgWithCors.naturalHeight || imgWithCors.height;
             
-            // Clear canvas and draw image
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(img, 0, 0);
+            ctx.drawImage(imgWithCors, 0, 0);
             
             // Convert canvas to blob
             blob = await new Promise((resolve, reject) => {
@@ -107,41 +133,32 @@ function MemeDisplay({ memes, onDeleteMeme, showToast }) {
                 if (canvasBlob) {
                   resolve(canvasBlob);
                 } else {
-                  reject(new Error('Failed to convert canvas to blob'));
+                  reject(new Error('Failed to convert CORS canvas to blob'));
                 }
               }, 'image/png', 1.0);
             });
             
-            console.log('Canvas method with CORS successful:', blob.type, blob.size);
-            
-          } catch (canvasError) {
-            console.error('Canvas method with CORS failed:', canvasError);
-            
-            // Method 3: Fallback to copying image URL as text
-            console.log('Falling back to copying image URL as text');
-            
-            try {
-              await navigator.clipboard.writeText(imageUrl);
-              showToast('Image URL copied to clipboard! You can paste the link and download the image.', 'success');
-              return; // Early return for URL copy success
-            } catch (textError) {
-              console.error('Text copy also failed:', textError);
-              throw new Error(`Unable to copy image or URL: ${canvasError.message}`);
-            }
+          } catch (corsError) {
+            console.error('Both canvas methods failed:', corsError);
+            throw new Error(`Unable to copy image: ${corsError.message}`);
           }
         }
       }
       
-      // Ensure we have a valid image blob (if we got here)
+      // Ensure we have a valid image blob
       if (!blob) {
-        throw new Error('No image blob created');
+        throw new Error('No image blob was created');
       }
       
-      // Validate blob type
+      // Validate blob type and size
       if (!blob.type.startsWith('image/')) {
         console.warn('Blob type is not an image:', blob.type);
         // Force PNG type if not detected as image
         blob = new Blob([blob], { type: 'image/png' });
+      }
+      
+      if (blob.size === 0) {
+        throw new Error('Generated image blob is empty');
       }
       
       console.log('Final blob for clipboard:', blob.type, blob.size);
@@ -153,7 +170,7 @@ function MemeDisplay({ memes, onDeleteMeme, showToast }) {
       
       // Copy the image to clipboard
       await navigator.clipboard.write([clipboardItem]);
-      showToast('Image copied to clipboard! You can now paste it in other apps.', 'success');
+      showToast('Image copied! You can now paste it in other apps.', 'success');
       
     } catch (error) {
       console.error('Failed to copy image:', error);
