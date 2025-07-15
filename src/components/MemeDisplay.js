@@ -8,7 +8,123 @@ function MemeDisplay({ memes, onDeleteMeme, showToast }) {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [memeToDelete, setMemeToDelete] = useState(null);
 
+  // Helper function to detect mobile devices
+  const isMobileDevice = () => {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+           (window.innerWidth <= 768 && window.innerHeight <= 1024);
+  };
+
+  // Helper function to get filename from URL
+  const getImageFilename = (url) => {
+    try {
+      const urlObj = new URL(url);
+      const path = urlObj.pathname;
+      const filename = path.split('/').pop();
+      return filename || 'meme-image';
+    } catch {
+      return 'meme-image';
+    }
+  };
+
+  // Helper function to download image for mobile devices
+  const downloadImageForMobile = async (imageUrl, filename) => {
+    try {
+      showToast('Downloading image...', 'info');
+      
+      // Create a temporary anchor element
+      const link = document.createElement('a');
+      link.href = imageUrl;
+      link.download = filename;
+      link.style.display = 'none';
+      
+      // Add to DOM, click, and remove
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      showToast('Image downloaded! Check your downloads folder.', 'success');
+      return true;
+    } catch (error) {
+      console.error('Download failed:', error);
+      return false;
+    }
+  };
+
+  // Helper function to try native sharing (mobile)
+  const tryNativeShare = async (imageUrl, filename) => {
+    if (!navigator.share) {
+      return false;
+    }
+
+    try {
+      showToast('Preparing to share...', 'info');
+      
+      // Fetch the image as blob
+      const response = await fetch(imageUrl);
+      const blob = await response.blob();
+      
+      // Create a file from the blob
+      const file = new File([blob], filename, { type: blob.type });
+      
+      // Check if we can share files
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: 'Share Meme',
+          text: 'Check out this meme!'
+        });
+        showToast('Image shared successfully!', 'success');
+        return true;
+      } else {
+        // Fallback to sharing URL
+        await navigator.share({
+          url: imageUrl,
+          title: 'Share Meme',
+          text: 'Check out this meme!'
+        });
+        showToast('Meme link shared!', 'success');
+        return true;
+      }
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        // User cancelled the share
+        return true;
+      }
+      console.error('Share failed:', error);
+      return false;
+    }
+  };
+
   const handleCopyImage = async (imageUrl, event) => {
+    const filename = getImageFilename(imageUrl);
+    
+    // Handle mobile devices differently
+    if (isMobileDevice()) {
+      console.log('Mobile device detected, using mobile-friendly methods');
+      
+      // Try native sharing first (iOS/Android)
+      const shareSuccess = await tryNativeShare(imageUrl, filename);
+      if (shareSuccess) {
+        return;
+      }
+      
+      // Fallback to download
+      const downloadSuccess = await downloadImageForMobile(imageUrl, filename);
+      if (downloadSuccess) {
+        return;
+      }
+      
+      // Final fallback: copy URL and show mobile instructions
+      try {
+        await navigator.clipboard.writeText(imageUrl);
+        showToast('Image URL copied! Long-press the image above and select "Copy Image" to copy the actual image.', 'info');
+      } catch (error) {
+        showToast('On mobile: long-press the image and select "Copy Image" or "Save Image".', 'info');
+      }
+      return;
+    }
+
+    // Desktop handling (existing logic)
     try {
       // Check if clipboard API supports writing images
       if (!navigator.clipboard || !window.isSecureContext) {
