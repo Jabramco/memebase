@@ -39,11 +39,102 @@ function MemeDisplay({ memes, onDeleteMeme, showToast }) {
     
     // Handle mobile devices differently
     if (isMobileDevice()) {
-      console.log('Mobile device detected, using native long-press behavior');
+      console.log('Mobile device detected, attempting native image copy');
       
-      // On mobile, the native long-press behavior is the most reliable
-      // Show instructions to use it instead of trying to programmatically copy
-      showToast('💡 Long-press the image above and select "Copy Image" to copy it!', 'info');
+      try {
+        // Find the image element
+        const imageElement = memeCard?.querySelector('.meme-image');
+        if (!imageElement) {
+          throw new Error('Could not find image element');
+        }
+        
+        showToast('Copying image...', 'info');
+        
+        // Method 1: Try using the modern Clipboard API with image data
+        if (navigator.clipboard && navigator.clipboard.write) {
+          try {
+            // Fetch the image as blob
+            const response = await fetch(imageUrl);
+            const blob = await response.blob();
+            
+            // Create a ClipboardItem with the image
+            const clipboardItem = new ClipboardItem({
+              [blob.type]: blob
+            });
+            
+            await navigator.clipboard.write([clipboardItem]);
+            showToast('Image copied successfully! 🎉', 'success');
+            return;
+          } catch (clipboardError) {
+            console.warn('Modern Clipboard API failed:', clipboardError);
+            // Fall through to next method
+          }
+        }
+        
+        // Method 2: Try using Selection API (works on some mobile browsers)
+        try {
+          // Create a range and select the image
+          const range = document.createRange();
+          range.selectNode(imageElement);
+          
+          // Clear any existing selection
+          const selection = window.getSelection();
+          selection.removeAllRanges();
+          selection.addRange(range);
+          
+          // Try to copy using execCommand
+          const success = document.execCommand('copy');
+          
+          // Clear the selection
+          selection.removeAllRanges();
+          
+          if (success) {
+            showToast('Image copied successfully! 🎉', 'success');
+            return;
+          } else {
+            throw new Error('execCommand copy failed');
+          }
+        } catch (selectionError) {
+          console.warn('Selection API copy failed:', selectionError);
+          // Fall through to next method
+        }
+        
+        // Method 3: Try using the Web Share API for sharing the image
+        if (navigator.share) {
+          try {
+            const response = await fetch(imageUrl);
+            const blob = await response.blob();
+            const file = new File([blob], 'meme.png', { type: blob.type });
+            
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+              await navigator.share({
+                files: [file],
+                title: 'Share Meme',
+                text: 'Check out this meme!'
+              });
+              showToast('Image shared successfully! 📤', 'success');
+              return;
+            }
+          } catch (shareError) {
+            console.warn('Share API failed:', shareError);
+          }
+        }
+        
+        // Method 4: Fallback - trigger download and show instructions
+        const link = document.createElement('a');
+        link.href = imageUrl;
+        link.download = 'meme.png';
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        showToast('Image downloaded! 📥 Long-press the image above and select "Copy Image" for direct copying.', 'info');
+        
+      } catch (error) {
+        console.error('Mobile copy failed:', error);
+        showToast('💡 Long-press the image above and select "Copy Image" to copy it!', 'info');
+      }
       return;
     }
 
