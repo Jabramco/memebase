@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Plus } from 'lucide-react';
+import { Search, Plus, Crown } from 'lucide-react';
 import './App.css';
 import MemeUpload from './components/MemeUpload';
 import MemeSearch from './components/MemeSearch';
 import MemeDisplay from './components/MemeDisplay';
+import MemeOfTheWeek from './components/MemeOfTheWeek';
 import Toast from './components/Toast';
 import Logo from './components/Logo';
 import { getMemesFromFirebase, deleteMemeFromFirebase } from './firebase-service';
+import { cleanupOldInteractions } from './interaction-service';
 
 function App() {
   const [memes, setMemes] = useState([]);
@@ -15,11 +17,13 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [toast, setToast] = useState(null);
-  const [activeTab, setActiveTab] = useState('search'); // 'search' or 'add'
+  const [activeTab, setActiveTab] = useState('search'); // 'search', 'add', or 'meme-week'
 
   // Load memes from Firebase on component mount
   useEffect(() => {
     loadMemes();
+    // Clean up old interaction data on app start
+    cleanupOldInteractions();
   }, []);
 
   // Scrollbar animation on scroll
@@ -214,6 +218,13 @@ function App() {
             <Plus className="tab-icon" size={16} />
             <span>Add Meme</span>
           </button>
+          <button 
+            className={`tab-button ${activeTab === 'meme-week' ? 'active' : ''}`}
+            onClick={() => setActiveTab('meme-week')}
+          >
+            <Crown className="tab-icon" size={16} />
+            <span>Meme of the Week</span>
+          </button>
         </div>
 
         {/* Tab Content */}
@@ -236,10 +247,18 @@ function App() {
                 />
               </div>
             </>
-          ) : (
+          ) : activeTab === 'add' ? (
             // Add Meme Tab Content
             <div className="upload-section">
               <MemeUpload onAddMeme={handleAddMeme} showToast={showToast} />
+            </div>
+          ) : (
+            // Meme of the Week Tab Content
+            <div className="meme-week-section">
+              <MemeOfTheWeek 
+                memes={memes} 
+                showToast={showToast}
+              />
             </div>
           )}
         </div>
