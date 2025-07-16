@@ -367,19 +367,15 @@ html {
   justify-content: center;
   width: 20px;
   height: 20px;
-  border-radius: 6px;
-  background: rgba(0, 0, 0, 0.1);
-  backdrop-filter: blur(5px);
   transition: all 0.2s ease;
 }
 
 .tab-button:hover .tab-icon {
-  background: rgba(0, 0, 0, 0.15);
+  transform: scale(1.1);
 }
 
 .tab-button.active .tab-icon {
-  background: rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(10px);
+  transform: scale(1.1);
 }
 
 
