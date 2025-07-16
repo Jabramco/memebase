@@ -73,12 +73,12 @@
 .no-meme-of-week h3 {
   margin-bottom: 15px;
   font-size: 1.5rem;
-  color: #333;
+  color: #fff;
 }
 
 .no-meme-of-week p {
   margin-bottom: 20px;
-  color: #666;
+  color: #fff;
   line-height: 1.6;
 }
 
@@ -98,7 +98,7 @@
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.3);
   font-size: 0.9rem;
-  color: #555;
+  color: #fff;
 }
 
 .score-item svg {
@@ -173,13 +173,13 @@
 .champion-title {
   font-size: 2rem;
   font-weight: 700;
-  color: #333;
+  color: #fff;
   margin: 0;
-  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .champion-keywords {
-  color: #666;
+  color: #fff;
   font-size: 1.1rem;
   font-style: italic;
 }
@@ -209,12 +209,12 @@
 .stat-value {
   font-size: 1.5rem;
   font-weight: 700;
-  color: #333;
+  color: #fff;
 }
 
 .stat-label {
   font-size: 0.9rem;
-  color: #666;
+  color: #fff;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -280,7 +280,7 @@
 .scoring-explanation h4 {
   margin-bottom: 15px;
   font-size: 1.2rem;
-  color: #333;
+  color: #fff;
   text-align: center;
 }
 
@@ -299,7 +299,7 @@
   background: rgba(255, 255, 255, 0.2);
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.3);
-  color: #555;
+  color: #fff;
   font-weight: 500;
 }
 
