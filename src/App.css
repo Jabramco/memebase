@@ -101,6 +101,8 @@ html {
   background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
   position: relative;
   overflow-x: hidden;
+  /* Ensure sticky positioning works */
+  overflow-y: visible;
 }
 
 /* Textured background pattern overlay */
@@ -271,9 +273,16 @@ html {
   padding: 20px 24px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.2);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-  margin-bottom: 40px;
-  position: relative;
-  z-index: 10;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  transition: box-shadow 0.2s;
+  /* Ensure fixed positioning works across browsers */
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  will-change: transform;
 }
 
 .app-title {
@@ -292,27 +301,54 @@ html {
 .app-container {
   max-width: 1400px;
   margin: 0 auto;
-  padding: 0 24px;
+  padding: 120px 24px 0 24px;
   position: relative;
   z-index: 1;
 }
 
 /* Tab Navigation - Plaid Style */
 .tab-navigation {
-  background: rgba(255, 255, 255, 0.98);
-  backdrop-filter: blur(20px);
+  background: rgba(255, 255, 255, 0.47);
   border-radius: 16px;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(5.9px);
+  -webkit-backdrop-filter: blur(5.9px);
+  border: 1px solid rgba(255, 255, 255, 0.43);
   padding: 4px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(255, 255, 255, 0.1);
-  margin-bottom: 32px;
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  margin: 20px auto 32px auto;
   position: relative;
   overflow: hidden;
   display: flex;
-  gap: 2px;
+  gap: 0; /* Remove the gap for perfect alignment */
   max-width: 600px;
-  margin-left: auto;
-  margin-right: auto;
+}
+
+/* Sliding background for active tab */
+.tab-navigation::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: 0;
+  width: 33.333%;
+  height: calc(100% - 8px);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12px;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 0;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.25), 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Position the sliding background for different tabs */
+.tab-navigation[data-active-tab="0"]::after {
+  transform: translateX(0);
+}
+
+.tab-navigation[data-active-tab="1"]::after {
+  transform: translateX(100%);
+}
+
+.tab-navigation[data-active-tab="2"]::after {
+  transform: translateX(200%);
 }
 
 
@@ -335,7 +371,7 @@ html {
   gap: 8px;
   position: relative;
   overflow: hidden;
-  z-index: 1;
+  z-index: 2;
   letter-spacing: -0.01em;
 }
 
@@ -348,14 +384,12 @@ html {
 
 /* Active Tab Styles */
 .tab-button.active {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: transparent;
   color: white;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.25), 0 2px 4px rgba(0, 0, 0, 0.1);
   transform: translateY(-1px);
 }
 
 .tab-button.active:hover {
-  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.3), 0 2px 6px rgba(0, 0, 0, 0.1);
   transform: translateY(-2px);
 }
 
@@ -753,11 +787,7 @@ html {
 
 /* Upload section - Enhanced glass effect */
 .upload-section {
-  background: linear-gradient(135deg, 
-    rgba(255, 255, 255, 0.12) 0%, 
-    rgba(255, 255, 255, 0.08) 50%, 
-    rgba(255, 255, 255, 0.15) 100%
-  );
+  background: rgba(255, 255, 255, 0.6);
   backdrop-filter: blur(25px) saturate(200%) brightness(110%);
   border-radius: 24px;
   padding: 32px;
@@ -854,7 +884,7 @@ html {
 
 /* Search section */
 .search-section {
-  background: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.6);
   backdrop-filter: blur(20px) saturate(180%);
   border-radius: 20px;
   padding: 24px;
@@ -1190,13 +1220,13 @@ html {
 /* Responsive design */
 @media (max-width: 768px) {
   .app-container {
-    padding: 0 16px;
+    padding: 120px 16px 0 16px;
   }
   
   .tab-navigation {
     padding: 3px;
     gap: 1px;
-    margin-bottom: 24px;
+    margin: 20px auto 24px auto;
   }
   
   .tab-button {
@@ -1247,12 +1277,13 @@ html {
   }
   
   .app-container {
-    padding: 0 12px;
+    padding: 120px 12px 0 12px;
   }
   
   .tab-navigation {
     padding: 2px;
     gap: 1px;
+    margin: 20px auto 24px auto;
   }
   
   .tab-button {

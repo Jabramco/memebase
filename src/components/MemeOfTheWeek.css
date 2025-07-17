@@ -232,6 +232,27 @@
   position: relative;
   overflow: hidden;
   animation: gradientShift 3s ease-in-out infinite;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+/* Holographic outline effect */
+.total-score::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  background: linear-gradient(45deg, 
+    #ff0080, #ff8c00, #40e0d0, #ee82ee, #ff0080, 
+    #ff8c00, #40e0d0, #ee82ee, #ff0080
+  );
+  background-size: 400% 400%;
+  border-radius: 17px;
+  z-index: -1;
+  animation: holographicShift 4s ease-in-out infinite;
+  filter: blur(1px);
 }
 
 .total-score::before {
@@ -262,6 +283,29 @@
 @keyframes gradientShift {
   0%, 100% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
+}
+
+@keyframes holographicShift {
+  0% {
+    background-position: 0% 50%;
+    filter: blur(1px) brightness(1);
+  }
+  25% {
+    background-position: 100% 50%;
+    filter: blur(1px) brightness(1.2);
+  }
+  50% {
+    background-position: 100% 100%;
+    filter: blur(1px) brightness(1);
+  }
+  75% {
+    background-position: 0% 100%;
+    filter: blur(1px) brightness(1.2);
+  }
+  100% {
+    background-position: 0% 50%;
+    filter: blur(1px) brightness(1);
+  }
 }
 
 @keyframes bounce {

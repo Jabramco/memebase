@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { FileImage, Upload } from 'lucide-react';
 import './MemeUpload.css';
 import { uploadImageToFirebase, addMemeToFirebase } from '../firebase-service';
+import BulkUploadModal from './BulkUploadModal';
 
 function MemeUpload({ onAddMeme, showToast }) {
   const [selectedFile, setSelectedFile] = useState(null);
@@ -9,22 +10,30 @@ function MemeUpload({ onAddMeme, showToast }) {
   const [title, setTitle] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('');
+  const [showBulkModal, setShowBulkModal] = useState(false);
+  const [bulkFiles, setBulkFiles] = useState([]);
 
   const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
-        showToast('Please select an image file', 'error');
-        return;
-      }
-      
-      // Validate file size (10MB limit for Firebase)
-      if (file.size > 10 * 1024 * 1024) {
-        showToast('File size must be less than 10MB', 'error');
-        return;
-      }
-      
+    const files = Array.from(e.target.files);
+    
+    if (files.length === 0) return;
+    
+    // Validate all files
+    const invalidFiles = files.filter(file => !file.type.startsWith('image/'));
+    if (invalidFiles.length > 0) {
+      showToast('Please select only image files', 'error');
+      return;
+    }
+    
+    const oversizedFiles = files.filter(file => file.size > 10 * 1024 * 1024);
+    if (oversizedFiles.length > 0) {
+      showToast('All files must be less than 10MB', 'error');
+      return;
+    }
+    
+    if (files.length === 1) {
+      // Single file upload - use existing flow
+      const file = files[0];
       setSelectedFile(file);
       
       // Create preview URL
@@ -33,6 +42,10 @@ function MemeUpload({ onAddMeme, showToast }) {
         setPreviewUrl(e.target.result);
       };
       reader.readAsDataURL(file);
+    } else {
+      // Multiple files - show bulk upload modal
+      setBulkFiles(files);
+      setShowBulkModal(true);
     }
   };
 
@@ -164,6 +177,7 @@ function MemeUpload({ onAddMeme, showToast }) {
                 type="file"
                 id="imageFile"
                 accept="image/*"
+                multiple
                 onChange={handleFileChange}
                 required
                 disabled={isUploading}
@@ -187,7 +201,7 @@ function MemeUpload({ onAddMeme, showToast }) {
               </div>
             </div>
             <small className="input-helper">
-              Supported formats: JPG, PNG, GIF, WebP (max 10MB)
+              Supported formats: JPG, PNG, GIF, WebP (max 10MB). Select multiple files for bulk upload.
             </small>
           </div>
         </div>
@@ -228,6 +242,19 @@ function MemeUpload({ onAddMeme, showToast }) {
           {isUploading ? 'Uploading to Cloud...' : 'Add Meme'}
         </button>
       </form>
+      
+      {/* Bulk Upload Modal */}
+      {showBulkModal && (
+        <BulkUploadModal
+          files={bulkFiles}
+          onClose={() => {
+            setShowBulkModal(false);
+            setBulkFiles([]);
+          }}
+          onAddMeme={onAddMeme}
+          showToast={showToast}
+        />
+      )}
     </div>
   );
 }

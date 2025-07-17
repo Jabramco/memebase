@@ -203,7 +203,13 @@ function App() {
       
       <div className="app-container">
         {/* Tab Navigation */}
-        <div className="tab-navigation">
+        <div 
+          className="tab-navigation"
+          data-active-tab={
+            activeTab === 'search' ? '0' : 
+            activeTab === 'add' ? '1' : '2'
+          }
+        >
           <button 
             className={`tab-button ${activeTab === 'search' ? 'active' : ''}`}
             onClick={() => setActiveTab('search')}
